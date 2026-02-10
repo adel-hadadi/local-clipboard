@@ -15,9 +15,10 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
+          # required so git-cliff can read the full tag history
           fetch-depth: 0
 
       - name: Set up Go
@@ -35,117 +36,26 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Generated version: $VERSION"
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get the previous tag
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -n 2 | tail -n 1)
-          CURRENT_TAG=${GITHUB_REF#refs/tags/}
-
-          echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
-
-          # Get commits between tags
-          COMMITS=$(git log $PREVIOUS_TAG..$CURRENT_TAG --pretty=format:"%s" --reverse)
-
-          # Initialize categories
-          FEATURES=""
-          FIXES=""
-          DOCS=""
-          CI=""
-          REFACTOR=""
-          CHORE=""
-          OTHER=""
-
-          # Categorize commits
-          while IFS= read -r commit; do
-            if [[ $commit == feat:* ]] || [[ $commit == feature:* ]]; then
-              FEATURES="${FEATURES}- ${commit#*: }"$'\n'
-            elif [[ $commit == fix:* ]]; then
-              FIXES="${FIXES}- ${commit#*: }"$'\n'
-            elif [[ $commit == docs:* ]] || [[ $commit == doc:* ]]; then
-              DOCS="${DOCS}- ${commit#*: }"$'\n'
-            elif [[ $commit == ci:* ]]; then
-              CI="${CI}- ${commit#*: }"$'\n'
-            elif [[ $commit == refactor:* ]]; then
-              REFACTOR="${REFACTOR}- ${commit#*: }"$'\n'
-            elif [[ $commit == chore:* ]]; then
-              CHORE="${CHORE}- ${commit#*: }"$'\n'
-            else
-              OTHER="${OTHER}- ${commit}"$'\n'
-            fi
-          done <<< "$COMMITS"
-
-          # Build changelog
-          CHANGELOG=""
-
-          if [ -n "$FEATURES" ]; then
-            CHANGELOG="${CHANGELOG}### ✨ Features"$'\n'"$FEATURES"$'\n'
-          fi
-
-          if [ -n "$FIXES" ]; then
-            CHANGELOG="${CHANGELOG}### 🐛 Bug Fixes"$'\n'"$FIXES"$'\n'
-          fi
-
-          if [ -n "$REFACTOR" ]; then
-            CHANGELOG="${CHANGELOG}### ♻️ Refactoring"$'\n'"$REFACTOR"$'\n'
-          fi
-
-          if [ -n "$DOCS" ]; then
-            CHANGELOG="${CHANGELOG}### 📚 Documentation"$'\n'"$DOCS"$'\n'
-          fi
-
-          if [ -n "$CI" ]; then
-            CHANGELOG="${CHANGELOG}### 🔧 CI/CD"$'\n'"$CI"$'\n'
-          fi
-
-          if [ -n "$CHORE" ]; then
-            CHANGELOG="${CHANGELOG}### 🧹 Chores"$'\n'"$CHORE"$'\n'
-          fi
-
-          if [ -n "$OTHER" ]; then
-            CHANGELOG="${CHANGELOG}### 📝 Other Changes"$'\n'"$OTHER"$'\n'
-          fi
-
-          # Save to output
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          echo "PREVIOUS_TAG=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
-
       - name: Build binaries
         run: |
           make build VERSION=${{ steps.version.outputs.VERSION }}
           ls -lh build/
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Generate changelog
+        id: git-cliff
+        uses: orhun/git-cliff-action@v4
         with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          name: v${{ steps.version.outputs.VERSION }}
-          body: |
-            ## Local Clipboard v${{ steps.version.outputs.VERSION }}
+          config: cliff.toml
+          args: --latest --strip all
+        env:
+          GITHUB_REPO: ${{ github.repository }}
 
-            ## Usage
-            1. Download the binary for your platform
-            2. Make it executable (Unix): `chmod +x local-clipboard-*`
-            3. Run it: `./local-clipboard-*` (or `.exe` on Windows)
-            4. Open the URL shown in the terminal
-
-            ---
-
-            ## 📋 Changelog
-
-            Changes since ${{ steps.changelog.outputs.PREVIOUS_TAG }}:
-
-            ${{ steps.changelog.outputs.CHANGELOG }}
-
-            ---
-
-            Built from commit: ${{ github.sha }}
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: ${{ steps.git-cliff.outputs.content }}
           files: |
             build/*
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
