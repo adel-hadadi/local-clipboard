@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -37,11 +38,19 @@ type FileData struct {
 	Content string `json:"content,omitempty"` // base64 encoded (only stored server-side)
 }
 
+type ClearConfig struct {
+	IntervalMin   int       `json:"intervalMin"`
+	Paused        bool      `json:"paused"`
+	NextClearTime time.Time `json:"nextClearTime"`
+}
+
 type Message struct {
-	ID       string    `json:"id"`
-	Text     string    `json:"text"`
-	SenderIP string    `json:"senderIp,omitempty"`
-	File     *FileData `json:"file,omitempty"`
+	ID       string       `json:"id"`
+	Type     string       `json:"type,omitempty"`
+	Text     string       `json:"text,omitempty"`
+	SenderIP string       `json:"senderIp,omitempty"`
+	File     *FileData    `json:"file,omitempty"`
+	Config   *ClearConfig `json:"config,omitempty"`
 }
 
 type broadcastMsg struct {
@@ -87,31 +96,73 @@ func (fs *FileStore) get(id string) (*FileData, bool) {
 	return file, ok
 }
 
+func (fs *FileStore) clear() {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.files = make(map[string]*FileData)
+}
+
 type connInfo struct {
 	conn *websocket.Conn
 	ip   string
 }
 
 type Hub struct {
-	clients    map[*websocket.Conn]string // conn -> remote IP
-	broadcast  chan broadcastMsg
-	register   chan connInfo
-	unregister chan *websocket.Conn
-	fileStore  *FileStore
-	mu         sync.Mutex
+	clients       map[*websocket.Conn]string // conn -> remote IP
+	broadcast     chan broadcastMsg
+	register      chan connInfo
+	unregister    chan *websocket.Conn
+	fileStore     *FileStore
+	mu            sync.Mutex
+	clearNowCh    chan struct{}
+	setIntervalCh chan int
+	togglePauseCh chan struct{}
+	clearConfig   ClearConfig
 }
 
 func newHub(fileStore *FileStore) *Hub {
 	return &Hub{
-		clients:    make(map[*websocket.Conn]string),
-		broadcast:  make(chan broadcastMsg),
-		register:   make(chan connInfo),
-		unregister: make(chan *websocket.Conn),
-		fileStore:  fileStore,
+		clients:       make(map[*websocket.Conn]string),
+		broadcast:     make(chan broadcastMsg),
+		register:      make(chan connInfo),
+		unregister:    make(chan *websocket.Conn),
+		fileStore:     fileStore,
+		clearNowCh:    make(chan struct{}, 1),
+		setIntervalCh: make(chan int, 1),
+		togglePauseCh: make(chan struct{}, 1),
+		clearConfig:   ClearConfig{IntervalMin: 0},
+	}
+}
+
+func (h *Hub) broadcastToAll(msg Message) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for conn := range h.clients {
+		if err := conn.WriteJSON(msg); err != nil {
+			log.Printf("Error writing message: %v", err)
+			delete(h.clients, conn)
+			conn.Close()
+		}
+	}
+}
+
+func (h *Hub) sendConfigToConn(conn *websocket.Conn) {
+	msg := Message{
+		Type: "config",
+		Config: &ClearConfig{
+			IntervalMin:   h.clearConfig.IntervalMin,
+			Paused:        h.clearConfig.Paused,
+			NextClearTime: h.clearConfig.NextClearTime,
+		},
+	}
+	if err := conn.WriteJSON(msg); err != nil {
+		log.Printf("Error sending config to new client: %v", err)
 	}
 }
 
 func (h *Hub) run() {
+	var timerChan <-chan time.Time
+
 	for {
 		select {
 		case ci := <-h.register:
@@ -119,6 +170,7 @@ func (h *Hub) run() {
 			h.clients[ci.conn] = ci.ip
 			h.mu.Unlock()
 			log.Printf("Client connected: %s. Total clients: %d", ci.ip, len(h.clients))
+			h.sendConfigToConn(ci.conn)
 
 		case conn := <-h.unregister:
 			h.mu.Lock()
@@ -186,6 +238,64 @@ func (h *Hub) run() {
 				}
 			}
 			h.mu.Unlock()
+
+		case <-timerChan:
+			h.fileStore.clear()
+			log.Printf("Auto-clear triggered (%d min)", h.clearConfig.IntervalMin)
+			h.broadcastToAll(Message{Type: "clear"})
+			next := time.Now().Add(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+			h.clearConfig.NextClearTime = next
+			timerChan = time.After(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+			h.broadcastToAll(Message{Type: "config", Config: &ClearConfig{
+				IntervalMin: h.clearConfig.IntervalMin, Paused: false, NextClearTime: next,
+			}})
+
+		case <-h.clearNowCh:
+			h.fileStore.clear()
+			log.Printf("Manual clear triggered")
+			h.broadcastToAll(Message{Type: "clear"})
+			if h.clearConfig.IntervalMin > 0 && !h.clearConfig.Paused {
+				next := time.Now().Add(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+				h.clearConfig.NextClearTime = next
+				timerChan = time.After(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+				h.broadcastToAll(Message{Type: "config", Config: &ClearConfig{
+					IntervalMin: h.clearConfig.IntervalMin, Paused: false, NextClearTime: next,
+				}})
+			}
+
+		case intervalMin := <-h.setIntervalCh:
+			h.clearConfig.IntervalMin = intervalMin
+			h.clearConfig.Paused = false
+			var next time.Time
+			if intervalMin > 0 {
+				next = time.Now().Add(time.Duration(intervalMin) * time.Minute)
+				timerChan = time.After(time.Duration(intervalMin) * time.Minute)
+			} else {
+				timerChan = nil
+			}
+			h.clearConfig.NextClearTime = next
+			h.broadcastToAll(Message{Type: "config", Config: &ClearConfig{
+				IntervalMin: intervalMin, Paused: false, NextClearTime: next,
+			}})
+
+		case <-h.togglePauseCh:
+			if h.clearConfig.IntervalMin <= 0 {
+				continue
+			}
+			h.clearConfig.Paused = !h.clearConfig.Paused
+			var next time.Time
+			if h.clearConfig.Paused {
+				timerChan = nil
+			} else {
+				next = time.Now().Add(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+				timerChan = time.After(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+			}
+			h.clearConfig.NextClearTime = next
+			h.broadcastToAll(Message{Type: "config", Config: &ClearConfig{
+				IntervalMin:   h.clearConfig.IntervalMin,
+				Paused:        h.clearConfig.Paused,
+				NextClearTime: next,
+			}})
 		}
 	}
 }
@@ -331,6 +441,56 @@ func main() {
 	})
 
 	http.HandleFunc("/ws", hub.handleWebSocket)
+
+	// Clear all messages and files
+	http.HandleFunc("/clear", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		select {
+		case hub.clearNowCh <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Set auto-clear interval
+	http.HandleFunc("/set-interval", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Interval int `json:"interval"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		if req.Interval < 0 {
+			http.Error(w, "Interval must be >= 0", http.StatusBadRequest)
+			return
+		}
+		select {
+		case hub.setIntervalCh <- req.Interval:
+		default:
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Toggle pause/resume for auto-clear timer
+	http.HandleFunc("/toggle-pause", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		select {
+		case hub.togglePauseCh <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// File upload endpoint
 	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {

@@ -7,10 +7,16 @@ const fileLabel = document.getElementById('fileLabel');
 const fileName = document.getElementById('fileName');
 const fileAttachment = document.getElementById('fileAttachment');
 const removeFileButton = document.getElementById('removeFile');
+const intervalSelect = document.getElementById('intervalSelect');
+const countdownDisplay = document.getElementById('countdownDisplay');
+const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+const clearNowBtn = document.getElementById('clearNowBtn');
 
 let ws = null;
 let isOwnMessage = false;
 let selectedFile = null;
+let nextClearTime = null;
+let countdownInterval = null;
 
 function connect() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -43,12 +49,19 @@ function connect() {
   };
 
   ws.onmessage = event => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'clear') {
+      clearAllMessages();
+      return;
+    }
+    if (data.type === 'config') {
+      applyConfig(data.config);
+      return;
+    }
     if (isOwnMessage) {
       isOwnMessage = false;
       return;
     }
-
-    const data = JSON.parse(event.data);
     const fileId = data.file?.id || data.id;
     addMessage(data.text || '', data.file, false, fileId || data.id, data.senderIp || '');
   };
@@ -129,6 +142,63 @@ function addMessage(text, file, isOwn, messageId, senderIp) {
 
   messagesDiv.appendChild(messageDiv);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function clearAllMessages() {
+  messagesDiv.innerHTML = '<div class="empty-state">No messages yet. Start typing!</div>';
+}
+
+function applyConfig(config) {
+  if (!config) return;
+  const newVal = String(config.intervalMin || 0);
+  if (intervalSelect.value !== newVal) intervalSelect.value = newVal;
+  const hasInterval = (config.intervalMin || 0) > 0;
+  pauseResumeBtn.style.display = hasInterval ? 'inline-flex' : 'none';
+  pauseResumeBtn.textContent = config.paused ? '▶' : '⏸';
+  pauseResumeBtn.title = config.paused ? 'Resume timer' : 'Pause timer';
+  if (hasInterval && !config.paused && config.nextClearTime) {
+    nextClearTime = new Date(config.nextClearTime);
+    countdownDisplay.style.display = 'inline';
+    startCountdown();
+  } else {
+    nextClearTime = null;
+    countdownDisplay.style.display = 'none';
+    stopCountdown();
+  }
+}
+
+function startCountdown() {
+  stopCountdown();
+  updateCountdownDisplay();
+  countdownInterval = setInterval(updateCountdownDisplay, 1000);
+}
+
+function stopCountdown() {
+  if (countdownInterval !== null) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+}
+
+function updateCountdownDisplay() {
+  if (!nextClearTime) {
+    countdownDisplay.style.display = 'none';
+    stopCountdown();
+    return;
+  }
+  const diffMs = nextClearTime - Date.now();
+  if (diffMs <= 0) {
+    countdownDisplay.style.display = 'none';
+    stopCountdown();
+    return;
+  }
+  const totalSec = Math.floor(diffMs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+  countdownDisplay.textContent = h > 0 ? `Next: ${h}h ${mm}:${ss}` : `Next: ${mm}:${ss}`;
 }
 
 function isMobile() {
@@ -464,6 +534,24 @@ if (isMobile()) {
     }
   });
 }
+
+intervalSelect.addEventListener('change', () => {
+  fetch('/set-interval', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ interval: parseInt(intervalSelect.value, 10) })
+  }).catch(err => console.error('Failed to set interval:', err));
+});
+
+pauseResumeBtn.addEventListener('click', () => {
+  fetch('/toggle-pause', { method: 'POST' }).catch(err =>
+    console.error('Failed to toggle pause:', err)
+  );
+});
+
+clearNowBtn.addEventListener('click', () => {
+  fetch('/clear', { method: 'POST' }).catch(err => console.error('Failed to clear:', err));
+});
 
 // Check for updates on page load
 checkForUpdates();

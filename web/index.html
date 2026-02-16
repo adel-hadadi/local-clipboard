@@ -75,6 +75,53 @@
       </div>
 
       <div
+        id="autoClearBar"
+        class="auto-clear-bar"
+      >
+        <div class="auto-clear-left">
+          <label
+            for="intervalSelect"
+            class="auto-clear-label"
+            >Auto-clear:</label
+          >
+          <select
+            id="intervalSelect"
+            class="auto-clear-select"
+          >
+            <option value="0">Never</option>
+            <option value="1">1 min</option>
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="30">30 min</option>
+            <option value="60">1 hour</option>
+            <option value="120">2 hours</option>
+          </select>
+        </div>
+        <div class="auto-clear-right">
+          <span
+            id="countdownDisplay"
+            class="countdown-display"
+            style="display: none"
+          ></span>
+          <button
+            id="pauseResumeBtn"
+            class="auto-clear-btn pause-resume-btn"
+            style="display: none"
+            title="Pause timer"
+          >
+            ⏸
+          </button>
+          <button
+            id="clearNowBtn"
+            class="auto-clear-btn clear-now-btn"
+            title="Clear all messages now"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div
         class="messages"
         id="messages"
       >
