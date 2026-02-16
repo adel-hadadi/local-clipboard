@@ -25,7 +25,7 @@ make build VERSION=1.2.3
 make update
 ```
 
-Binaries are output to `./build/`. Releases are triggered by pushing a `v*` git tag.
+Binaries are output to `./build/`. Releases are triggered by pushing a `v*` git tag, which also builds and pushes a multi-platform Docker image to GHCR (`ghcr.io/<owner>/local-clipboard`).
 
 There are no tests or linting configurations in this project.
 
@@ -46,4 +46,6 @@ The entire backend is in `main.go`. Web assets (`web/index.html`, `web/script.js
 
 **Frontend (`web/script.js`):** Manages the WebSocket connection with auto-reconnect (2s interval). Own messages are filtered client-side to prevent echo. The update checker fetches from the GitHub API on page load to detect new releases and is platform/arch-aware. Includes an auto-clear control bar with interval selector, pause/resume button, live countdown display, and manual clear button.
 
-**Versioning:** The version string is injected at build time via `-ldflags "-X main.Version=$(VERSION)"` and exposed via `/api/version`.
+**Versioning:** The version string is injected at build time via `-ldflags "-X main.Version=$(VERSION)"` and exposed via `/api/version`. The Docker image receives it via the `VERSION` build arg.
+
+**Docker:** A multi-stage `Dockerfile` uses `ARG GO_VERSION` and `ARG ALPINE_VERSION` to parameterise the base images (`golang:${GO_VERSION}-alpine` / `alpine:${ALPINE_VERSION}`). The canonical values live in the top-level `env:` block of `release.yml` (`GO_VERSION`, `ALPINE_VERSION`) and are passed as build args by the workflow — one place to bump either version. Build locally: `docker build --build-arg VERSION=x.y.z -t local-clipboard .`. Run: `docker run -p 8080:8080 local-clipboard`.
