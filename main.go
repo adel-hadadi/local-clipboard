@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -307,7 +308,7 @@ func (h *Hub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	ip := realIP(r)
 	h.register <- connInfo{conn: conn, ip: ip}
 
 	defer func() {
@@ -331,6 +332,21 @@ func (h *Hub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			h.broadcast <- broadcastMsg{msg: msg, sender: conn}
 		}
 	}
+}
+
+func realIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// X-Forwarded-For can be a comma-separated list; the first entry is the client
+		if i := strings.Index(xff, ","); i != -1 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return ip
 }
 
 func getLocalIP() string {

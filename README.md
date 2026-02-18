@@ -111,4 +111,49 @@ go mod vendor
 
 This will download all dependencies into a `vendor/` directory for offline use.
 
+## Docker
+
+### Run with Docker
+
+```bash
+docker run -p 8080:8080 ghcr.io/mokhajavi75/local-clipboard:latest
+```
+
+### Run with Docker Compose
+
+```yaml
+services:
+  local-clipboard:
+    image: ghcr.io/mokhajavi75/local-clipboard:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+```
+
+### Behind a Reverse Proxy
+
+When running behind a reverse proxy, configure it to forward the real client IP so sender labels show correctly instead of the Docker gateway IP.
+
+**Caddy:**
+
+```caddy
+example.com {
+  reverse_proxy 127.0.0.1:8080 {
+    header_up X-Real-IP {remote_host}
+  }
+}
+```
+
+> Caddy sets `X-Forwarded-For` automatically; the `header_up` line adds `X-Real-IP` as well.
+
+**nginx:**
+
+```nginx
+location / {
+  proxy_pass http://127.0.0.1:8080;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Real-IP       $remote_addr;
+}
+```
+
 Enjoy your local clipboard! 🎉
