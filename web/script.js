@@ -17,6 +17,7 @@ let isOwnMessage = false;
 let selectedFile = null;
 let nextClearTime = null;
 let countdownInterval = null;
+let connectedCount = 0;
 
 function connect() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -56,6 +57,11 @@ function connect() {
     }
     if (data.type === 'config') {
       applyConfig(data.config);
+      return;
+    }
+    if (data.type === 'clients') {
+      connectedCount = data.count;
+      statusDiv.textContent = `Connected ✅ · ${connectedCount} device${connectedCount !== 1 ? 's' : ''}`;
       return;
     }
     if (isOwnMessage) {

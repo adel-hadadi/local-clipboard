@@ -44,6 +44,8 @@ The entire backend is in `main.go`. Web assets (`web/index.html`, `web/script.js
 
 **Auto-clear timer:** Hub owns a `ClearConfig` (interval, paused, nextClearTime) and communicates with three buffered channels (`clearNowCh`, `setIntervalCh`, `togglePauseCh`). A nil `<-chan time.Time` (the nil-channel trick) disables the timer without a separate flag. On any clear or config change, Hub broadcasts a `type:"clear"` or `type:"config"` WS message to all clients. New clients receive the current config immediately on connect.
 
+**Connected-device count:** On every client connect or disconnect, Hub broadcasts a `type:"clients"` WS message with a `count` field to all remaining clients. The frontend updates the status bar to show e.g. `Connected ✅ · 3 devices`.
+
 **Frontend (`web/script.js`):** Manages the WebSocket connection with auto-reconnect (2s interval). Own messages are filtered client-side to prevent echo. The update checker fetches from the GitHub API on page load to detect new releases and is platform/arch-aware. Includes an auto-clear control bar with interval selector, pause/resume button, live countdown display, and manual clear button.
 
 **Versioning:** The version string is injected at build time via `-ldflags "-X main.Version=$(VERSION)"` and exposed via `/api/version`. The Docker image receives it via the `VERSION` build arg.

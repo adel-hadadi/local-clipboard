@@ -52,6 +52,7 @@ type Message struct {
 	SenderIP string       `json:"senderIp,omitempty"`
 	File     *FileData    `json:"file,omitempty"`
 	Config   *ClearConfig `json:"config,omitempty"`
+	Count    int          `json:"count,omitempty"`
 }
 
 type broadcastMsg struct {
@@ -169,9 +170,11 @@ func (h *Hub) run() {
 		case ci := <-h.register:
 			h.mu.Lock()
 			h.clients[ci.conn] = ci.ip
+			count := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("Client connected: %s. Total clients: %d", ci.ip, len(h.clients))
+			log.Printf("Client connected: %s. Total clients: %d", ci.ip, count)
 			h.sendConfigToConn(ci.conn)
+			h.broadcastToAll(Message{Type: "clients", Count: count})
 
 		case conn := <-h.unregister:
 			h.mu.Lock()
@@ -180,8 +183,10 @@ func (h *Hub) run() {
 				delete(h.clients, conn)
 				conn.Close()
 			}
+			count := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("Client disconnected: %s. Total clients: %d", ip, len(h.clients))
+			log.Printf("Client disconnected: %s. Total clients: %d", ip, count)
+			h.broadcastToAll(Message{Type: "clients", Count: count})
 
 		case bm := <-h.broadcast:
 			message := bm.msg
