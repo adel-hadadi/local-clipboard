@@ -115,12 +115,12 @@ function addMessage(text, file, isOwn, messageId, senderIp) {
     messageDiv.appendChild(fileDiv);
   }
 
-  const hasActions = (text && !isMobile()) || file;
+  const hasActions = (text && (!isMobile() || window.isSecureContext)) || file;
   if (hasActions) {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'message-actions';
 
-    if (text && !isMobile()) {
+    if (text && (!isMobile() || window.isSecureContext)) {
       const copyBtn = document.createElement('button');
       copyBtn.className = 'action-btn copy-btn';
       copyBtn.textContent = 'Copy';
