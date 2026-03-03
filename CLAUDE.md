@@ -42,7 +42,7 @@ The entire backend is in `main.go`. Web assets (`web/index.html`, `web/script.js
 
 **File sharing flow:** Client uploads file via `POST /upload` → backend stores in FileStore and returns a file ID → frontend sends a WebSocket message with the file ID (no content) → Hub broadcasts to all clients → each client fetches `/file/:id` to download.
 
-**Auto-clear timer:** Hub owns a `ClearConfig` (interval, paused, nextClearTime) and communicates with three buffered channels (`clearNowCh`, `setIntervalCh`, `togglePauseCh`). A nil `<-chan time.Time` (the nil-channel trick) disables the timer without a separate flag. On any clear or config change, Hub broadcasts a `type:"clear"` or `type:"config"` WS message to all clients. New clients receive the current config immediately on connect.
+**Auto-clear timer:** Hub owns a `ClearConfig` (interval, paused, nextClearTime) and communicates with three buffered channels (`clearNowCh`, `setIntervalCh`, `togglePauseCh`). A nil `<-chan time.Time` (the nil-channel trick) disables the timer without a separate flag. On any clear or config change, Hub broadcasts a `type:"clear"` or `type:"config"` WS message to all clients. New clients receive the current config immediately on connect. The default interval is **10 minutes** — the timer is started immediately in `hub.run()` when `IntervalMin > 0`.
 
 **Connected-device count:** On every client connect or disconnect, Hub broadcasts a `type:"clients"` WS message with a `count` field to all remaining clients. The frontend updates the status bar to show e.g. `Connected ✅ · 3 devices`.
 

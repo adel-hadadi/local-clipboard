@@ -132,7 +132,7 @@ func newHub(fileStore *FileStore) *Hub {
 		clearNowCh:    make(chan struct{}, 1),
 		setIntervalCh: make(chan int, 1),
 		togglePauseCh: make(chan struct{}, 1),
-		clearConfig:   ClearConfig{IntervalMin: 0},
+		clearConfig:   ClearConfig{IntervalMin: 10},
 	}
 }
 
@@ -164,6 +164,11 @@ func (h *Hub) sendConfigToConn(conn *websocket.Conn) {
 
 func (h *Hub) run() {
 	var timerChan <-chan time.Time
+	if h.clearConfig.IntervalMin > 0 {
+		next := time.Now().Add(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+		h.clearConfig.NextClearTime = next
+		timerChan = time.After(time.Duration(h.clearConfig.IntervalMin) * time.Minute)
+	}
 
 	for {
 		select {
