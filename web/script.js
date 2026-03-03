@@ -25,7 +25,7 @@ function connect() {
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    statusDiv.textContent = 'Connected \u2713';
+    statusDiv.textContent = 'Connected ✅';
     statusDiv.className = 'status connected';
     messageInput.disabled = false;
     fileInput.disabled = false;
@@ -106,7 +106,7 @@ function addMessage(text, file, isOwn, messageId, senderIp) {
     const fileDiv = document.createElement('div');
     fileDiv.className = 'message-file';
     fileDiv.innerHTML = `
-      <span class="file-icon">\uD83D\uDCCE</span>
+      <span class="file-icon">📎</span>
       <span class="file-info">
         <span class="file-name-display">${escapeHTML(file.name)}</span>
         <span class="file-size">${formatFileSize(file.size)}</span>
