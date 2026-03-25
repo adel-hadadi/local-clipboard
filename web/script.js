@@ -104,6 +104,7 @@ function addMessage(text, file, isOwn, messageId, senderIp) {
   if (text) {
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text';
+    textDiv.dir = 'auto';
     textDiv.textContent = text;
     messageDiv.appendChild(textDiv);
   }

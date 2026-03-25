@@ -46,7 +46,7 @@ The entire backend is in `main.go`. Web assets (`web/index.html`, `web/script.js
 
 **Connected-device count:** On every client connect or disconnect, Hub broadcasts a `type:"clients"` WS message with a `count` field to all remaining clients. The frontend updates the status bar to show e.g. `Connected ✅ · 3 devices`.
 
-**Frontend (`web/script.js`):** Manages the WebSocket connection with auto-reconnect (2s interval). Own messages are filtered client-side to prevent echo. The update checker fetches from the GitHub API on page load to detect new releases and is platform/arch-aware. Includes an auto-clear control bar with interval selector, pause/resume button, live countdown display, and manual clear button.
+**Frontend (`web/script.js`):** Manages the WebSocket connection with auto-reconnect (2s interval). Own messages are filtered client-side to prevent echo. The update checker fetches from the GitHub API on page load to detect new releases and is platform/arch-aware. Includes an auto-clear control bar with interval selector, pause/resume button, live countdown display, and manual clear button. Both the message text and the textarea input use `dir="auto"` for automatic RTL/LTR detection (e.g. Persian, Arabic render right-to-left).
 
 **Versioning:** The version string is injected at build time via `-ldflags "-X main.Version=$(VERSION)"` and exposed via `/api/version`. The Docker image receives it via the `VERSION` build arg.
 
