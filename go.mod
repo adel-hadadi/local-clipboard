@@ -1,6 +1,6 @@
 module local-clipboard
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/gorilla/websocket v1.5.3
@@ -9,7 +9,7 @@ require (
 )
 
 require (
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
