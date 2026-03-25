@@ -313,7 +313,7 @@ h1 {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-  animation: slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: slideInFile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   transition: all 0.3s ease;
 }
 
@@ -321,7 +321,7 @@ h1 {
   animation: slideOut 0.3s cubic-bezier(0.36, 0, 0.66, -0.56) forwards;
 }
 
-@keyframes slideIn {
+@keyframes slideInFile {
   from {
     opacity: 0;
     transform: translateY(-15px) scale(0.95);
