@@ -136,6 +136,16 @@ func newHub(fileStore *FileStore) *Hub {
 	}
 }
 
+// uniqueDeviceCount returns the number of distinct IPs in the clients map.
+// Must be called with h.mu held.
+func uniqueDeviceCount(clients map[*websocket.Conn]string) int {
+	seen := make(map[string]struct{})
+	for _, ip := range clients {
+		seen[ip] = struct{}{}
+	}
+	return len(seen)
+}
+
 func (h *Hub) broadcastToAll(msg Message) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -173,11 +183,30 @@ func (h *Hub) run() {
 	for {
 		select {
 		case ci := <-h.register:
+			// Drain any pending unregisters before adding the new client.
+			// Without this, a simultaneous reconnect (page refresh, brief disconnect)
+			// causes Go's select to randomly pick register first, inflating the count.
+		drainLoop:
+			for {
+				select {
+				case conn := <-h.unregister:
+					h.mu.Lock()
+					ip := h.clients[conn]
+					if ip != "" {
+						delete(h.clients, conn)
+						conn.Close()
+					}
+					h.mu.Unlock()
+					log.Printf("Client disconnected: %s", ip)
+				default:
+					break drainLoop
+				}
+			}
 			h.mu.Lock()
 			h.clients[ci.conn] = ci.ip
-			count := len(h.clients)
+			count := uniqueDeviceCount(h.clients)
 			h.mu.Unlock()
-			log.Printf("Client connected: %s. Total clients: %d", ci.ip, count)
+			log.Printf("Client connected: %s. Total devices: %d", ci.ip, count)
 			h.sendConfigToConn(ci.conn)
 			h.broadcastToAll(Message{Type: "clients", Count: count})
 
@@ -188,9 +217,9 @@ func (h *Hub) run() {
 				delete(h.clients, conn)
 				conn.Close()
 			}
-			count := len(h.clients)
+			count := uniqueDeviceCount(h.clients)
 			h.mu.Unlock()
-			log.Printf("Client disconnected: %s. Total clients: %d", ip, count)
+			log.Printf("Client disconnected: %s. Total devices: %d", ip, count)
 			h.broadcastToAll(Message{Type: "clients", Count: count})
 
 		case bm := <-h.broadcast:
