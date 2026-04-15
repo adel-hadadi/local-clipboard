@@ -1,4 +1,4 @@
-.PHONY: help run build update
+.PHONY: help run build update vet
 
 # Default port
 PORT ?= 8080
@@ -41,8 +41,16 @@ build: ## Build for macOS, Linux and Windows
 
 update: ## Update dependencies
 	@echo "Updating dependencies..."
-	@go get -u
+	@go get -u ./...
 	@go mod tidy
 	@echo "Dependencies updated."
+
+vet: ## Run static analysis (go vet + modernize if available)
+	@if command -v modernize >/dev/null 2>&1; then \
+		go vet -vettool=$$(command -v modernize) ./...; \
+	else \
+		echo "modernize not found, running plain go vet"; \
+		go vet ./...; \
+	fi
 
 .DEFAULT_GOAL := help

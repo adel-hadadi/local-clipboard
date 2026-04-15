@@ -376,8 +376,8 @@ func (h *Hub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func realIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		// X-Forwarded-For can be a comma-separated list; the first entry is the client
-		if i := strings.Index(xff, ","); i != -1 {
-			return strings.TrimSpace(xff[:i])
+		if before, _, ok := strings.Cut(xff, ","); ok {
+			return strings.TrimSpace(before)
 		}
 		return strings.TrimSpace(xff)
 	}
