@@ -134,54 +134,44 @@
       </div>
 
       <div class="input-area">
-        <textarea
-          id="messageInput"
-          placeholder="Type your message... (Shift+Enter for new line)"
-          disabled
-          autocomplete="off"
-          dir="auto"
-          rows="3"
-        ></textarea>
+        <div class="input-row">
+          <textarea
+            id="messageInput"
+            placeholder="Type your message... (Shift+Enter for new line)"
+            disabled
+            autocomplete="off"
+            dir="auto"
+            rows="3"
+          ></textarea>
+          <div class="input-buttons">
+            <input
+              type="file"
+              id="fileInput"
+              accept="*/*"
+              multiple
+              disabled
+              style="display: none"
+            />
+            <label
+              for="fileInput"
+              id="fileLabel"
+              class="icon-btn"
+              >📎</label
+            >
+            <button
+              id="sendButton"
+              class="icon-btn"
+              disabled
+            >
+              ➤
+            </button>
+          </div>
+        </div>
         <div
-          id="fileAttachment"
-          class="file-attachment"
+          id="fileAttachments"
+          class="file-attachments"
           style="display: none"
-        >
-          <span class="file-attachment-icon">📎</span>
-          <span
-            id="fileName"
-            class="file-attachment-name"
-          ></span>
-          <button
-            id="removeFile"
-            class="file-attachment-remove"
-            title="Remove file"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="input-buttons">
-          <input
-            type="file"
-            id="fileInput"
-            accept="*/*"
-            disabled
-            style="display: none"
-          />
-          <label
-            for="fileInput"
-            id="fileLabel"
-            class="icon-btn"
-            >📎</label
-          >
-          <button
-            id="sendButton"
-            class="icon-btn"
-            disabled
-          >
-            ➤
-          </button>
-        </div>
+        ></div>
       </div>
     </div>
 

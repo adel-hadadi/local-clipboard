@@ -3,18 +3,16 @@ const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const statusDiv = document.getElementById('status');
 const fileInput = document.getElementById('fileInput');
-const fileLabel = document.getElementById('fileLabel');
-const fileName = document.getElementById('fileName');
-const fileAttachment = document.getElementById('fileAttachment');
-const removeFileButton = document.getElementById('removeFile');
+const fileAttachmentsDiv = document.getElementById('fileAttachments');
 const intervalSelect = document.getElementById('intervalSelect');
 const countdownDisplay = document.getElementById('countdownDisplay');
 const pauseResumeBtn = document.getElementById('pauseResumeBtn');
 const clearNowBtn = document.getElementById('clearNowBtn');
 
 let ws = null;
-let isOwnMessage = false;
-let selectedFile = null;
+const ownMessageIds = new Set();
+let selectedFiles = [];
+let fileChipIdCounter = 0;
 let nextClearTime = null;
 let countdownInterval = null;
 let connectedCount = 0;
@@ -64,8 +62,8 @@ function connect() {
       statusDiv.textContent = `Connected ✅ · ${connectedCount} device${connectedCount !== 1 ? 's' : ''}`;
       return;
     }
-    if (isOwnMessage) {
-      isOwnMessage = false;
+    if (data.id && ownMessageIds.has(data.id)) {
+      ownMessageIds.delete(data.id);
       return;
     }
     const fileId = data.file?.id || data.id;
@@ -276,96 +274,156 @@ async function uploadFile(file) {
   return await response.json();
 }
 
-async function sendMessage() {
-  const text = messageInput.value.trim();
-  const hasFile = selectedFile !== null;
-
-  if ((!text && !hasFile) || !ws || ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  let fileData = null;
-  let fileId = null;
-
-  if (hasFile) {
-    try {
-      sendButton.disabled = true;
-      sendButton.textContent = '⌛';
-      const uploadResult = await uploadFile(selectedFile);
-      fileData = {
-        name: uploadResult.name,
-        size: uploadResult.size,
-        type: uploadResult.type
-      };
-      fileId = uploadResult.id;
-    } catch (error) {
-      alert('Failed to upload file. Please try again.');
-      sendButton.disabled = false;
-      sendButton.textContent = '➤';
-      return;
-    }
-  }
-
-  const messageId = fileId || Date.now().toString();
+function sendOwnMessage(text, fileData) {
+  const messageId = fileData?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const message = {
     id: messageId,
     text: text,
-    file: fileData ? { ...fileData, id: fileId } : null
+    file: fileData || null
   };
-
-  isOwnMessage = true;
+  ownMessageIds.add(messageId);
   ws.send(JSON.stringify(message));
-  addMessage(text, fileData ? { ...fileData, id: fileId } : null, true, messageId, '');
+  addMessage(text, fileData || null, true, messageId, '');
+}
 
-  messageInput.value = '';
-  messageInput.style.height = 'auto';
-  clearFile();
-  fileLabel.textContent = '📎';
-  sendButton.textContent = '➤';
-  messageInput.focus();
+async function sendMessage() {
+  const text = messageInput.value.trim();
+  const hasFiles = selectedFiles.length > 0;
+
+  if ((!text && !hasFiles) || !ws || ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  sendButton.disabled = true;
+  sendButton.textContent = '⌛';
+
+  try {
+    if (hasFiles) {
+      const filesToSend = selectedFiles.slice();
+      const textToSend = text;
+      let textSent = false;
+
+      for (let i = 0; i < filesToSend.length; i++) {
+        const item = filesToSend[i];
+        let uploadResult;
+        try {
+          uploadResult = await uploadFile(item.file);
+        } catch (error) {
+          alert(`Failed to upload ${item.file.name}.`);
+          continue;
+        }
+        const fileData = {
+          id: uploadResult.id,
+          name: uploadResult.name,
+          size: uploadResult.size,
+          type: uploadResult.type
+        };
+        // Attach the text to the first file message so it stays associated
+        const attachText = !textSent ? textToSend : '';
+        sendOwnMessage(attachText, fileData);
+        textSent = true;
+      }
+
+      // If we had text but every upload failed, still send the text alone
+      if (!textSent && textToSend) {
+        sendOwnMessage(textToSend, null);
+      }
+    } else {
+      sendOwnMessage(text, null);
+    }
+
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    clearFiles(false);
+  } finally {
+    sendButton.textContent = '➤';
+    messageInput.focus();
+    updateSendButton();
+  }
 }
 
 function updateSendButton() {
   const hasText = messageInput.value.trim().length > 0;
-  const hasFile = selectedFile !== null;
-  sendButton.disabled = !hasText && !hasFile;
+  const hasFiles = selectedFiles.length > 0;
+  sendButton.disabled = !hasText && !hasFiles;
 }
 
-function clearFile(animated = true) {
-  if (animated && fileAttachment.style.display !== 'none') {
-    fileAttachment.classList.add('removing');
+function renderAttachments() {
+  fileAttachmentsDiv.innerHTML = '';
+  if (selectedFiles.length === 0) {
+    fileAttachmentsDiv.style.display = 'none';
+    return;
+  }
+  fileAttachmentsDiv.style.display = 'flex';
+  for (const item of selectedFiles) {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'file-chip-icon';
+    iconSpan.textContent = '📎';
+    chip.appendChild(iconSpan);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-chip-name';
+    nameSpan.textContent = item.file.name;
+    nameSpan.title = item.file.name;
+    chip.appendChild(nameSpan);
+
+    const sizeSpan = document.createElement('span');
+    sizeSpan.className = 'file-chip-size';
+    sizeSpan.textContent = formatFileSize(item.file.size);
+    chip.appendChild(sizeSpan);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'file-chip-remove';
+    removeBtn.title = 'Remove file';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => removeFileChip(item.id, chip));
+    chip.appendChild(removeBtn);
+
+    fileAttachmentsDiv.appendChild(chip);
+  }
+}
+
+function removeFileChip(id, chipEl) {
+  chipEl.classList.add('removing');
+  setTimeout(() => {
+    selectedFiles = selectedFiles.filter(f => f.id !== id);
+    renderAttachments();
+    if (selectedFiles.length === 0) fileInput.value = '';
+    updateSendButton();
+  }, 200);
+}
+
+function clearFiles(animated = true) {
+  if (animated && selectedFiles.length > 0) {
+    const chips = fileAttachmentsDiv.querySelectorAll('.file-chip');
+    chips.forEach(c => c.classList.add('removing'));
     setTimeout(() => {
-      selectedFile = null;
-      fileName.textContent = '';
-      fileAttachment.style.display = 'none';
-      fileAttachment.classList.remove('removing');
+      selectedFiles = [];
+      renderAttachments();
       fileInput.value = '';
       updateSendButton();
-    }, 300);
+    }, 200);
   } else {
-    selectedFile = null;
-    fileName.textContent = '';
-    fileAttachment.style.display = 'none';
-    fileAttachment.classList.remove('removing');
+    selectedFiles = [];
+    renderAttachments();
     fileInput.value = '';
     updateSendButton();
   }
 }
 
 fileInput.addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (file) {
-    selectedFile = file;
-    fileName.textContent = file.name;
-    fileAttachment.style.display = 'flex';
-  } else {
-    clearFile();
+  const files = Array.from(e.target.files || []);
+  for (const file of files) {
+    selectedFiles.push({ id: ++fileChipIdCounter, file });
   }
+  // Reset input so selecting the same file again still fires change
+  fileInput.value = '';
+  renderAttachments();
   updateSendButton();
-});
-
-removeFileButton.addEventListener('click', () => {
-  clearFile();
 });
 
 sendButton.addEventListener('click', sendMessage);

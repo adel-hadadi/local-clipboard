@@ -238,6 +238,12 @@ h1 {
 /* Input area */
 .input-area {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-row {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: stretch;
@@ -304,102 +310,97 @@ h1 {
   transform: none;
 }
 
-.file-attachment {
+.file-attachments {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.file-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-  animation: slideInFile 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  transition: all 0.3s ease;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 999px;
+  font-size: 0.82em;
+  color: #495057;
+  max-width: 100%;
+  animation: fileChipIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.file-attachment.removing {
-  animation: slideOut 0.3s cubic-bezier(0.36, 0, 0.66, -0.56) forwards;
+.file-chip.removing {
+  animation: fileChipOut 0.2s ease forwards;
 }
 
-@keyframes slideInFile {
+@keyframes fileChipIn {
   from {
     opacity: 0;
-    transform: translateY(-15px) scale(0.95);
-    max-height: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
+    transform: scale(0.85);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
-    max-height: 100px;
-    margin-bottom: 8px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    transform: scale(1);
   }
 }
 
-@keyframes slideOut {
+@keyframes fileChipOut {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
-    max-height: 100px;
-    margin-bottom: 8px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(-15px) scale(0.95);
-    max-height: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
+    transform: scale(0.85);
   }
 }
 
-.file-attachment-icon {
-  font-size: 1.2em;
+.file-chip-icon {
+  font-size: 0.95em;
   flex-shrink: 0;
+  opacity: 0.7;
 }
 
-.file-attachment-name {
-  flex: 1;
-  font-size: 0.9em;
-  color: #ffffff;
+.file-chip-name {
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 180px;
 }
 
-.file-attachment-remove {
-  background: rgba(255, 255, 255, 0.2);
+.file-chip-size {
+  font-size: 0.88em;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.file-chip-remove {
+  background: rgba(102, 126, 234, 0.12);
   border: none;
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #ffffff;
-  font-size: 1em;
+  color: #667eea;
+  font-size: 0.75em;
   font-weight: bold;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   flex-shrink: 0;
   padding: 0;
   line-height: 1;
 }
 
-.file-attachment-remove:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.1);
+.file-chip-remove:hover {
+  background: rgba(102, 126, 234, 0.25);
 }
 
-.file-attachment-remove:active {
-  transform: scale(0.95);
+.file-chip-remove:active {
+  transform: scale(0.9);
 }
 
 .empty-state {
